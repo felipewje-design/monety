@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { TrendingUp, History, X, Timer, Pickaxe, Gem, Crown, Sparkles, Star, Award, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ... Mantenha as interfaces Product, Investment e tierColors iguais ao seu código original ...
 interface Product {
   id: string;
   name: string;
@@ -56,6 +55,7 @@ export default function ProductsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -64,11 +64,14 @@ export default function ProductsPage() {
 
   const fetchProducts = async () => {
     try {
+      setLoading(true);
       const response = await fetch('/api/products');
-      if (response.ok) {
+      const contentType = response.headers.get("content-type");
+
+      // Verifica se a resposta é JSON válido
+      if (response.ok && contentType && contentType.includes("application/json")) {
         const data = await response.json();
         
-        // CORREÇÃO: Verifica se data é um array antes de fazer o map
         if (Array.isArray(data)) {
             const productsWithTiers = data.map((p: any, idx: number) => ({
             ...p,
@@ -76,28 +79,32 @@ export default function ProductsPage() {
             icon: ['pickaxe', 'pickaxe', 'gem', 'sparkles', 'gem', 'star', 'crown'][idx] || 'pickaxe'
             }));
             setProducts(productsWithTiers);
+            setApiError(false);
         } else {
-            console.error("API não retornou uma lista:", data);
+            console.error("API retornou dados inválidos:", data);
+            setProducts([]); 
         }
       } else {
-        console.error("Erro ao buscar produtos:", response.status);
+        // Se a API falhar (ex: erro HTML do Netlify), não crasha a tela
+        console.error("Erro na API ou resposta não é JSON");
+        setApiError(true);
       }
     } catch (err) {
       console.error('Error fetching products:', err);
+      setApiError(true);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchInvestments = async () => {
-    // ... Mantenha sua função fetchInvestments igual ...
     try {
       const response = await fetch('/api/investments', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
-        setInvestments(data);
+        if(Array.isArray(data)) setInvestments(data);
       }
     } catch (err) {
       console.error('Error fetching investments:', err);
@@ -105,7 +112,6 @@ export default function ProductsPage() {
   };
 
   const handleInvestment = async (productId: string, productName: string, price: number) => {
-    // ... Mantenha sua função handleInvestment igual ...
     const userBalance = Number(user?.balance) || 0;
     if (userBalance < price) {
       toast.error('Saldo insuficiente', { description: 'Faça um depósito para continuar' });
@@ -178,12 +184,18 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Products Grid - COM TRATAMENTO DE LISTA VAZIA */}
+      {/* Products Grid */}
       {products.length === 0 ? (
         <div className="text-center py-12 bg-[#111111]/50 rounded-xl border border-[#1a1a1a] border-dashed">
             <AlertCircle className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <h3 className="text-white font-semibold text-lg">Nenhum produto disponível</h3>
-            <p className="text-gray-500 text-sm mt-1">Verifique sua conexão ou tente novamente mais tarde.</p>
+            <h3 className="text-white font-semibold text-lg">
+                {apiError ? "Erro de Conexão com o Servidor" : "Nenhum produto disponível"}
+            </h3>
+            <p className="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+                {apiError 
+                 ? "Não foi possível carregar os produtos. Verifique se o backend está online." 
+                 : "Verifique sua conexão ou tente novamente mais tarde."}
+            </p>
             <Button 
                 onClick={fetchProducts} 
                 variant="outline" 
@@ -273,7 +285,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* History Modal - Mantenha igual */}
+      {/* History Modal */}
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
         <DialogContent className="bg-[#111111] border-[#1a1a1a] text-white max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
