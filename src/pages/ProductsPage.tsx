@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { TrendingUp, History, X, Timer, Pickaxe, Gem, Crown, Sparkles, Star, Award, Clock } from 'lucide-react';
+import { TrendingUp, History, X, Timer, Pickaxe, Gem, Crown, Sparkles, Star, Award, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
+// ... Mantenha as interfaces Product, Investment e tierColors iguais ao seu código original ...
 interface Product {
   id: string;
   name: string;
@@ -49,8 +50,6 @@ const getIcon = (iconName: string, className: string) => {
   return icons[iconName] || <Pickaxe className={className} />;
 };
 
-// ... (mantenha os imports e interfaces iguais)
-
 export default function ProductsPage() {
   const { user, token, refreshUser } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -59,27 +58,29 @@ export default function ProductsPage() {
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    if (token) {
-      fetchProducts();
-      fetchInvestments();
-    }
+    fetchProducts();
+    if(token) fetchInvestments();
   }, [token]);
 
   const fetchProducts = async () => {
     try {
-      // CORREÇÃO: Adicionado Header de Autorização
-      const response = await fetch('/api/products', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
+      const response = await fetch('/api/products');
       if (response.ok) {
         const data = await response.json();
-        const productsWithTiers = data.map((p: any, idx: number) => ({
-          ...p,
-          tier: ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'emerald', 'elite'][idx] || 'bronze',
-          icon: ['pickaxe', 'pickaxe', 'gem', 'sparkles', 'gem', 'star', 'crown'][idx] || 'pickaxe'
-        }));
-        setProducts(productsWithTiers);
+        
+        // CORREÇÃO: Verifica se data é um array antes de fazer o map
+        if (Array.isArray(data)) {
+            const productsWithTiers = data.map((p: any, idx: number) => ({
+            ...p,
+            tier: ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'emerald', 'elite'][idx] || 'bronze',
+            icon: ['pickaxe', 'pickaxe', 'gem', 'sparkles', 'gem', 'star', 'crown'][idx] || 'pickaxe'
+            }));
+            setProducts(productsWithTiers);
+        } else {
+            console.error("API não retornou uma lista:", data);
+        }
+      } else {
+        console.error("Erro ao buscar produtos:", response.status);
       }
     } catch (err) {
       console.error('Error fetching products:', err);
@@ -89,6 +90,7 @@ export default function ProductsPage() {
   };
 
   const fetchInvestments = async () => {
+    // ... Mantenha sua função fetchInvestments igual ...
     try {
       const response = await fetch('/api/investments', {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -103,31 +105,22 @@ export default function ProductsPage() {
   };
 
   const handleInvestment = async (productId: string, productName: string, price: number) => {
+    // ... Mantenha sua função handleInvestment igual ...
     const userBalance = Number(user?.balance) || 0;
-    
     if (userBalance < price) {
-      toast.error('Saldo insuficiente', {
-        description: 'Faça um depósito para continuar'
-      });
+      toast.error('Saldo insuficiente', { description: 'Faça um depósito para continuar' });
       return;
     }
-
     try {
       const response = await fetch('/api/investments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ productId })
       });
-
       if (response.ok) {
         await refreshUser();
         await fetchInvestments();
-        toast.success('🎉 Compra realizada!', {
-          description: `Você adquiriu o ${productName} com sucesso`
-        });
+        toast.success('🎉 Compra realizada!', { description: `Você adquiriu o ${productName} com sucesso` });
       } else {
         const error = await response.json();
         toast.error(error.error || 'Erro ao investir');
@@ -140,9 +133,9 @@ export default function ProductsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 h-[50vh]">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <Loader2 className="w-10 h-10 text-[#22c55e] animate-spin mx-auto mb-4" />
           <p className="text-white">Carregando produtos...</p>
         </div>
       </div>
@@ -185,87 +178,102 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Products Grid */}
-      <div className="space-y-3">
-        {products.map((product, index) => {
-          const colors = tierColors[product.tier] || tierColors.bronze;
-          const userBalance = Number(user?.balance) || 0;
-          const canBuy = userBalance >= Number(product.price);
-
-          return (
-            <div
-              key={product.id}
-              className={`bg-gradient-to-br ${colors.bg} border ${colors.border} rounded-xl overflow-hidden animate-fade-in`}
-              style={{ animationDelay: `${index * 50}ms` }}
+      {/* Products Grid - COM TRATAMENTO DE LISTA VAZIA */}
+      {products.length === 0 ? (
+        <div className="text-center py-12 bg-[#111111]/50 rounded-xl border border-[#1a1a1a] border-dashed">
+            <AlertCircle className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <h3 className="text-white font-semibold text-lg">Nenhum produto disponível</h3>
+            <p className="text-gray-500 text-sm mt-1">Verifique sua conexão ou tente novamente mais tarde.</p>
+            <Button 
+                onClick={fetchProducts} 
+                variant="outline" 
+                className="mt-4 border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10"
             >
-              <div className="p-4">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 bg-gradient-to-br ${colors.bg} rounded-lg flex items-center justify-center`}>
-                      {getIcon(product.icon, `w-5 h-5 ${colors.icon}`)}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-white">{product.name}</h3>
-                      <p className="text-[#22c55e] font-bold">R$ {Number(product.price).toFixed(2)}</p>
-                    </div>
-                  </div>
-                </div>
+                Tentar Novamente
+            </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+            {products.map((product, index) => {
+            const colors = tierColors[product.tier] || tierColors.bronze;
+            const userBalance = Number(user?.balance) || 0;
+            const canBuy = userBalance >= Number(product.price);
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <TrendingUp className="w-3 h-3 text-[#22c55e]" />
-                      <span className="text-gray-500 text-xs">Diário</span>
-                    </div>
-                    <p className="text-sm font-bold text-[#22c55e]">R$ {Number(product.daily_return).toFixed(2)}</p>
-                  </div>
-                  <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <Clock className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-500 text-xs">Duração</span>
-                    </div>
-                    <p className="text-sm font-bold text-white">{product.duration_days} dias</p>
-                  </div>
-                  <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <TrendingUp className="w-3 h-3 text-[#22c55e]" />
-                      <span className="text-gray-500 text-xs">ROI</span>
-                    </div>
-                    <p className="text-sm font-bold text-[#22c55e]">
-                      {((Number(product.daily_return) * product.duration_days / Number(product.price)) * 100).toFixed(0)}%
-                    </p>
-                  </div>
-                </div>
-
-                {/* Total Return Box */}
-                <div className="bg-[#0a0a0a]/50 rounded-lg p-2 mb-3 text-center">
-                  <span className="text-gray-500 text-xs">Retorno total em {product.duration_days} dias</span>
-                  <p className="text-lg font-bold text-[#22c55e]">
-                    R$ {(Number(product.daily_return) * product.duration_days).toFixed(2)}
-                  </p>
-                </div>
-
-                {/* Buy Button */}
-                <button
-                  onClick={() => handleInvestment(product.id, product.name, Number(product.price))}
-                  disabled={!canBuy}
-                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
-                    canBuy
-                      ? 'bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white hover:from-[#16a34a] hover:to-[#22c55e] shadow-lg shadow-[#22c55e]/20'
-                      : 'bg-[#1a1a1a] text-gray-500 cursor-not-allowed'
-                  }`}
+            return (
+                <div
+                key={product.id}
+                className={`bg-gradient-to-br ${colors.bg} border ${colors.border} rounded-xl overflow-hidden animate-fade-in`}
+                style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  {canBuy ? 'COMPRAR AGORA' : 'SALDO INSUFICIENTE'}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                <div className="p-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 bg-gradient-to-br ${colors.bg} rounded-lg flex items-center justify-center`}>
+                        {getIcon(product.icon, `w-5 h-5 ${colors.icon}`)}
+                        </div>
+                        <div>
+                        <h3 className="font-bold text-white">{product.name}</h3>
+                        <p className="text-[#22c55e] font-bold">R$ {Number(product.price).toFixed(2)}</p>
+                        </div>
+                    </div>
+                    </div>
 
-      {/* History Modal */}
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                        <TrendingUp className="w-3 h-3 text-[#22c55e]" />
+                        <span className="text-gray-500 text-xs">Diário</span>
+                        </div>
+                        <p className="text-sm font-bold text-[#22c55e]">R$ {Number(product.daily_return).toFixed(2)}</p>
+                    </div>
+                    <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                        <Clock className="w-3 h-3 text-gray-400" />
+                        <span className="text-gray-500 text-xs">Duração</span>
+                        </div>
+                        <p className="text-sm font-bold text-white">{product.duration_days} dias</p>
+                    </div>
+                    <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                        <TrendingUp className="w-3 h-3 text-[#22c55e]" />
+                        <span className="text-gray-500 text-xs">ROI</span>
+                        </div>
+                        <p className="text-sm font-bold text-[#22c55e]">
+                        {((Number(product.daily_return) * product.duration_days / Number(product.price)) * 100).toFixed(0)}%
+                        </p>
+                    </div>
+                    </div>
+
+                    {/* Total Return Box */}
+                    <div className="bg-[#0a0a0a]/50 rounded-lg p-2 mb-3 text-center">
+                    <span className="text-gray-500 text-xs">Retorno total em {product.duration_days} dias</span>
+                    <p className="text-lg font-bold text-[#22c55e]">
+                        R$ {(Number(product.daily_return) * product.duration_days).toFixed(2)}
+                    </p>
+                    </div>
+
+                    {/* Buy Button */}
+                    <button
+                    onClick={() => handleInvestment(product.id, product.name, Number(product.price))}
+                    disabled={!canBuy}
+                    className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
+                        canBuy
+                        ? 'bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white hover:from-[#16a34a] hover:to-[#22c55e] shadow-lg shadow-[#22c55e]/20'
+                        : 'bg-[#1a1a1a] text-gray-500 cursor-not-allowed'
+                    }`}
+                    >
+                    {canBuy ? 'COMPRAR AGORA' : 'SALDO INSUFICIENTE'}
+                    </button>
+                </div>
+                </div>
+            );
+            })}
+        </div>
+      )}
+
+      {/* History Modal - Mantenha igual */}
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
         <DialogContent className="bg-[#111111] border-[#1a1a1a] text-white max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -289,7 +297,7 @@ export default function ProductsPage() {
           ) : (
             <div className="space-y-3">
               {investments.map((inv) => {
-                const totalDays = 60; // Duração padrão
+                const totalDays = 60;
                 const daysElapsed = totalDays - inv.days_remaining;
                 const progress = (daysElapsed / totalDays) * 100;
 
