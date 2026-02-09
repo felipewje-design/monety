@@ -3,18 +3,20 @@ import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import CheckIn from '../components/CheckIn';
 import Roulette from '../components/Roulette';
-import { TrendingUp, Users, Wallet, Loader2 } from 'lucide-react';
+import { TrendingUp, Users, Wallet, Loader2, AlertCircle } from 'lucide-react';
 
 export default function HomePage() {
   const { user, token } = useAuth();
   const [stats, setStats] = useState({ todayEarnings: 0, newInvites: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    // Só busca stats se tiver token
     if (token) {
       fetchStats();
     } else {
-      setLoadingStats(false); // Se não tem token, para de carregar
+      setLoadingStats(false);
     }
   }, [token]);
 
@@ -25,9 +27,12 @@ export default function HomePage() {
       });
       
       const contentType = response.headers.get("content-type");
-      if (response.ok && contentType?.includes("application/json")) {
+      if (response.ok && contentType && contentType.includes("application/json")) {
         const data = await response.json();
         setStats(data);
+      } else {
+        // Se der erro, mantém zero mas não trava a tela
+        console.warn("API de stats indisponível ou retornando erro");
       }
     } catch (err) {
       console.error('Erro ao buscar stats:', err);
@@ -40,8 +45,9 @@ export default function HomePage() {
     return user?.email?.charAt(0).toUpperCase() || 'M';
   };
 
-  // CORREÇÃO AQUI: Em vez de retornar null, mostra um loading
-  if (!user) {
+  // Se estiver carregando o usuário, mostra loading
+  // Se o user for null (não logado), o AuthContext deve redirecionar, mas por segurança:
+  if (!user && loadingStats) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
         <Loader2 className="w-8 h-8 text-[#22c55e] animate-spin" />
@@ -51,11 +57,12 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 pb-6 animate-fade-in">
+      {/* Header do Usuário */}
       <div className="flex items-center justify-between animate-slide-down">
         <div>
           <p className="text-gray-400 text-sm">Bem-vindo de volta</p>
           <h1 className="text-xl font-bold text-white">
-            {user?.email?.split('@')[0] || 'Usuário'}
+            {user?.email ? user.email.split('@')[0] : 'Investidor'}
           </h1>
         </div>
         <div className="w-12 h-12 bg-gradient-to-br from-[#22c55e] to-[#16a34a] rounded-full flex items-center justify-center shadow-lg shadow-[#22c55e]/30">
@@ -63,6 +70,7 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Grid de Ganhos e Convites */}
       <div className="grid grid-cols-2 gap-3">
         {/* Card Ganhos Hoje */}
         <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#1a1a1a] animate-fade-in">
@@ -74,7 +82,7 @@ export default function HomePage() {
               <span className="text-gray-400 text-sm">Ganhos Hoje</span>
             </div>
             <p className="text-2xl font-bold text-[#22c55e]">
-              R$ {Number(stats.todayEarnings || 0).toFixed(2)}
+              R$ {Number(stats?.todayEarnings || 0).toFixed(2)}
             </p>
           </CardContent>
         </Card>
@@ -88,7 +96,7 @@ export default function HomePage() {
               </div>
               <span className="text-gray-400 text-sm">Convidados</span>
             </div>
-            <p className="text-2xl font-bold text-[#22c55e]">{stats.newInvites}</p>
+            <p className="text-2xl font-bold text-[#22c55e]">{stats?.newInvites || 0}</p>
           </CardContent>
         </Card>
       </div>
@@ -101,19 +109,20 @@ export default function HomePage() {
             <span className="text-gray-400 text-sm">Saldo Disponível</span>
           </div>
           <p className="text-3xl font-extrabold text-white mb-3">
-            R$ {(Number(user?.balance) || 0).toFixed(2)}
+            R$ {Number(user?.balance || 0).toFixed(2)}
           </p>
           <div className="pt-3 border-t border-[#1a1a1a]">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Total Ganhos</span>
               <span className="text-[#22c55e] font-semibold">
-                R$ {(Number(user?.totalEarned) || 0).toFixed(2)}
+                R$ {Number(user?.totalEarned || 0).toFixed(2)}
               </span>
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Check-in Diário */}
       <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#1a1a1a] animate-fade-in">
         <CardContent className="pt-6">
           <h3 className="text-white font-bold mb-4">Login Diário</h3>
@@ -121,6 +130,7 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
+      {/* Roleta */}
       <div className="animate-fade-in">
         <Roulette onSpinComplete={fetchStats} />
       </div>
