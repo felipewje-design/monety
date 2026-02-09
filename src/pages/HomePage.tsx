@@ -6,42 +6,33 @@ import Roulette from '../components/Roulette';
 import { TrendingUp, Users, Wallet, Loader2 } from 'lucide-react';
 
 export default function HomePage() {
-  const { user, token } = useAuth(); // Assume que useAuth também poderia retornar um 'isLoading' global
-  // Inicializa com valores zerados seguros
+  const { user, token } = useAuth();
   const [stats, setStats] = useState({ todayEarnings: 0, newInvites: 0 });
-  // Loading local para o fetch da API
-  const [loadingStats, setLoadingStats] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Só chama a API se o token existir
+    // Só tenta buscar stats se o token existir
     if (token) {
       fetchStats();
     }
-  }, [token]); // <--- CRUCIAL: Re-executa quando o token for gerado
+  }, [token]); // Monitora o token
 
   const fetchStats = async () => {
-    if (!token) return;
-    
-    setLoadingStats(true);
     try {
       const response = await fetch('/api/stats/today', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      // Verifica se a resposta é JSON válido antes de tentar parsear
+      // Verifica se o retorno é JSON para evitar erro de parse
       const contentType = response.headers.get("content-type");
-      if (response.ok && contentType && contentType.includes("application/json")) {
+      if (response.ok && contentType?.includes("application/json")) {
         const data = await response.json();
         setStats(data);
-      } else {
-        console.warn("API retornou erro ou não é JSON:", response.status);
-        // Opcional: Tratar erros 401 (token expirado) aqui
       }
     } catch (err) {
-      console.error('Error fetching stats:', err);
-      // Fallback silencioso: mantém os dados zerados, não quebra a tela
+      console.error('Erro ao buscar stats:', err);
     } finally {
-      setLoadingStats(false);
+      setLoading(false);
     }
   };
 
@@ -49,22 +40,10 @@ export default function HomePage() {
     return user?.email?.charAt(0).toUpperCase() || 'M';
   };
 
-  // Previne erros de cálculo se os dados do usuário ainda não carregaram
-  const userBalance = Number(user?.balance || 0);
-  const userTotalEarned = Number(user?.totalEarned || 0);
-
-  // Se o usuário ainda não carregou do Firebase, mostra loading simples
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
-         <Loader2 className="w-8 h-8 text-[#22c55e] animate-spin" />
-      </div>
-    );
-  }
+  if (!user) return null;
 
   return (
     <div className="space-y-6 pb-6 animate-fade-in">
-      {/* Welcome Header */}
       <div className="flex items-center justify-between animate-slide-down">
         <div>
           <p className="text-gray-400 text-sm">Bem-vindo de volta</p>
@@ -77,7 +56,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#1a1a1a] animate-fade-in">
           <CardContent className="pt-4">
@@ -88,11 +66,7 @@ export default function HomePage() {
               <span className="text-gray-400 text-sm">Ganhos Hoje</span>
             </div>
             <p className="text-2xl font-bold text-[#22c55e]">
-              {loadingStats ? (
-                <span className="text-sm text-gray-500">...</span>
-              ) : (
-                `R$ ${stats.todayEarnings.toFixed(2)}`
-              )}
+              R$ {Number(stats.todayEarnings || 0).toFixed(2)}
             </p>
           </CardContent>
         </Card>
@@ -105,14 +79,11 @@ export default function HomePage() {
               </div>
               <span className="text-gray-400 text-sm">Convidados</span>
             </div>
-            <p className="text-2xl font-bold text-[#22c55e]">
-               {loadingStats ? "..." : stats.newInvites}
-            </p>
+            <p className="text-2xl font-bold text-[#22c55e]">{stats.newInvites}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Balance Card */}
       <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#22c55e]/30 animate-fade-in">
         <CardContent className="pt-5 pb-5">
           <div className="flex items-center gap-2 mb-2">
@@ -120,20 +91,19 @@ export default function HomePage() {
             <span className="text-gray-400 text-sm">Saldo Disponível</span>
           </div>
           <p className="text-3xl font-extrabold text-white mb-3">
-            R$ {userBalance.toFixed(2)}
+            R$ {(Number(user?.balance) || 0).toFixed(2)}
           </p>
           <div className="pt-3 border-t border-[#1a1a1a]">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Total Ganhos</span>
               <span className="text-[#22c55e] font-semibold">
-                R$ {userTotalEarned.toFixed(2)}
+                R$ {(Number(user?.totalEarned) || 0).toFixed(2)}
               </span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Daily Check-in */}
       <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#1a1a1a] animate-fade-in">
         <CardContent className="pt-6">
           <h3 className="text-white font-bold mb-4">Login Diário</h3>
@@ -141,7 +111,6 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
-      {/* Roulette */}
       <div className="animate-fade-in">
         <Roulette onSpinComplete={fetchStats} />
       </div>
