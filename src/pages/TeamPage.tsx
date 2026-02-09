@@ -25,7 +25,8 @@ export default function TeamPage() {
   const [activeLevel, setActiveLevel] = useState<1 | 2 | 3>(1);
   const [copied, setCopied] = useState(false);
 
-  const inviteLink = `${window.location.origin}/?code=${user?.invite_code}`;
+  // CORREÇÃO: invite_code -> inviteCode
+  const inviteLink = `${window.location.origin}/?code=${user?.inviteCode}`;
 
   useEffect(() => {
     fetchTeamData();
@@ -49,8 +50,9 @@ export default function TeamPage() {
   };
 
   const handleCopyCode = () => {
-    if (user?.invite_code) {
-      navigator.clipboard.writeText(user.invite_code);
+    // CORREÇÃO: invite_code -> inviteCode
+    if (user?.inviteCode) {
+      navigator.clipboard.writeText(user.inviteCode);
       setCopied(true);
       toast.success('Código copiado!');
       setTimeout(() => setCopied(false), 2000);
@@ -61,7 +63,8 @@ export default function TeamPage() {
     if (navigator.share) {
       navigator.share({
         title: 'Junte-se ao Monety',
-        text: `Use meu código de convite: ${user?.invite_code}`,
+        // CORREÇÃO: invite_code -> inviteCode
+        text: `Use meu código de convite: ${user?.inviteCode}`,
         url: inviteLink
       });
     } else {
@@ -175,7 +178,8 @@ export default function TeamPage() {
         <CardContent className="space-y-4">
           <div className="bg-[#0a0a0a] rounded-xl p-3">
             <p className="text-sm text-gray-400 mb-1">Código:</p>
-            <p className="text-[#22c55e] font-bold text-lg">{user?.invite_code}</p>
+            {/* CORREÇÃO: invite_code -> inviteCode */}
+            <p className="text-[#22c55e] font-bold text-lg">{user?.inviteCode}</p>
           </div>
 
           <div className="bg-[#0a0a0a] rounded-xl p-3">
