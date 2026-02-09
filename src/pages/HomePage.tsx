@@ -11,6 +11,7 @@ export default function HomePage() {
   const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
+    // Tenta buscar stats, mas se não tiver token, apenas para o loading
     if (token) {
       fetchStats();
     } else {
@@ -21,33 +22,35 @@ export default function HomePage() {
   const fetchStats = async () => {
     try {
       const response = await fetch('/api/stats/today', {
-        headers: { 'Authorization': Bearer ${token} }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       
       const contentType = response.headers.get("content-type");
       if (response.ok && contentType && contentType.includes("application/json")) {
         const data = await response.json();
-        setStats(data || { todayEarnings: 0, newInvites: 0 });
+        setStats(data);
+      } else {
+        console.warn("API de stats não retornou JSON válido, usando zeros.");
       }
     } catch (err) {
-      console.error('Erro ao buscar stats:', err);
+      console.error('Erro ao buscar stats (usando padrão):', err);
     } finally {
+      // Garante que o loading pare para exibir a tela
       setLoadingStats(false);
     }
   };
 
-  // Função segura para pegar a inicial ou retornar valor padrão
   const getUserInitial = () => {
     return user?.email?.charAt(0).toUpperCase() || 'U';
   };
 
-  // Função segura para pegar o nome do email
   const getUserName = () => {
-    return user?.email?.split('@')[0] || 'Investidor';
+    return user?.email ? user.email.split('@')[0] : 'Investidor';
   };
 
-  // Se estiver carregando ou não tiver usuário, mostra loading para evitar crash
-  if (!user && loadingStats) {
+  // Se estiver carregando E não tiver dados do usuário ainda, mostra loader.
+  // Se tiver usuário, mostra a tela mesmo carregando stats em segundo plano.
+  if (loadingStats && !user) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
         <Loader2 className="w-8 h-8 text-[#22c55e] animate-spin" />
@@ -56,9 +59,9 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-6 pb-6 animate-fade-in">
+    <div className="space-y-6 pb-20 px-4 pt-4 min-h-screen bg-black/90">
       {/* Header do Usuário */}
-      <div className="flex items-center justify-between animate-slide-down">
+      <div className="flex items-center justify-between">
         <div>
           <p className="text-gray-400 text-sm">Bem-vindo de volta</p>
           <h1 className="text-xl font-bold text-white">
@@ -73,37 +76,37 @@ export default function HomePage() {
       {/* Grid de Ganhos e Convites */}
       <div className="grid grid-cols-2 gap-3">
         {/* Card Ganhos Hoje */}
-        <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#1a1a1a]">
-          <CardContent className="pt-4">
+        <Card className="bg-[#111111] border-[#1a1a1a]">
+          <CardContent className="pt-4 p-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 bg-[#22c55e]/20 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-4 h-4 text-[#22c55e]" />
               </div>
-              <span className="text-gray-400 text-sm">Ganhos Hoje</span>
+              <span className="text-gray-400 text-xs">Ganhos Hoje</span>
             </div>
-            <p className="text-2xl font-bold text-[#22c55e]">
+            <p className="text-xl font-bold text-[#22c55e]">
               R$ {Number(stats?.todayEarnings || 0).toFixed(2)}
             </p>
           </CardContent>
         </Card>
 
         {/* Card Convidados */}
-        <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#1a1a1a]">
-          <CardContent className="pt-4">
+        <Card className="bg-[#111111] border-[#1a1a1a]">
+          <CardContent className="pt-4 p-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 bg-[#22c55e]/20 rounded-lg flex items-center justify-center">
                 <Users className="w-4 h-4 text-[#22c55e]" />
               </div>
-              <span className="text-gray-400 text-sm">Convidados</span>
+              <span className="text-gray-400 text-xs">Convidados</span>
             </div>
-            <p className="text-2xl font-bold text-[#22c55e]">{stats?.newInvites || 0}</p>
+            <p className="text-xl font-bold text-white">{stats?.newInvites || 0}</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Card Saldo Principal */}
-      <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#22c55e]/30">
-        <CardContent className="pt-5 pb-5">
+      <Card className="bg-[#111111] border-[#22c55e]/30">
+        <CardContent className="pt-5 pb-5 px-5">
           <div className="flex items-center gap-2 mb-2">
             <Wallet className="w-5 h-5 text-[#22c55e]" />
             <span className="text-gray-400 text-sm">Saldo Disponível</span>
@@ -123,7 +126,7 @@ export default function HomePage() {
       </Card>
 
       {/* Check-in Diário */}
-      <Card className="bg-[#111111]/80 backdrop-blur-sm border-[#1a1a1a]">
+      <Card className="bg-[#111111] border-[#1a1a1a]">
         <CardContent className="pt-6">
           <h3 className="text-white font-bold mb-4">Login Diário</h3>
           <CheckIn onCheckInComplete={fetchStats} />
@@ -131,7 +134,7 @@ export default function HomePage() {
       </Card>
 
       {/* Roleta */}
-      <div>
+      <div className="pb-4">
         <Roulette onSpinComplete={fetchStats} />
       </div>
     </div>
