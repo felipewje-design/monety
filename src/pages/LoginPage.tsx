@@ -21,20 +21,25 @@ export default function LoginPage({ onSwitchToRegister }: LoginPageProps) {
     setLoading(true);
 
     try {
-      // Ao completar o login, o AuthContext atualiza o 'user'
-      // O App.tsx detecta essa mudança e mostra a Home automaticamente
       await login(email, password);
       
       toast.success('🎉 Bem-vindo ao Monety!', {
         description: 'Login realizado com sucesso',
-        duration: 3000
+        duration: 2000
       });
+
+      // CORREÇÃO AQUI:
+      // Aguarda 1.5s para o usuário ver a mensagem e força o recarregamento
+      // para garantir que o App.tsx pegue o novo estado do usuário.
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+
     } catch (err: any) {
       const errorMsg = err.message || 'Erro ao fazer login';
       setError(errorMsg);
       toast.error('Erro ao entrar', { description: errorMsg });
-    } finally {
-      setLoading(false);
+      setLoading(false); // Só para o loading se der erro
     }
   };
 
