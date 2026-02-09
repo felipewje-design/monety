@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -14,12 +14,7 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<'home' | 'products' | 'team' | 'profile'>('home');
   const [showAuth, setShowAuth] = useState<'login' | 'register'>('login');
 
-  useEffect(() => {
-    if (user) {
-      setCurrentPage('home');
-    }
-  }, [user]);
-
+  // Se não houver usuário, mostramos as telas de Login/Registro
   if (!user) {
     return (
       <>
@@ -32,8 +27,9 @@ function AppContent() {
     );
   }
 
+  // Se houver usuário, renderizamos o App principal
   return (
-    <div className="min-h-screen bg-[#0a0a0a] pb-24">
+    <div className="min-h-screen bg-[#0a0a0a] pb-24 animate-fade-in">
       {/* Header */}
       <header className="bg-[#111111] border-b border-[#1a1a1a] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -45,7 +41,11 @@ function AppContent() {
           </div>
 
           <button
-            onClick={logout}
+            onClick={() => {
+              logout();
+              // Opcional: Recarregar ao sair para limpar estados
+              // window.location.reload(); 
+            }}
             className="text-gray-300 hover:text-white px-4 py-2 rounded-lg hover:bg-red-500/20 transition-colors text-sm"
           >
             Sair
@@ -61,7 +61,7 @@ function AppContent() {
         {currentPage === 'profile' && <ProfilePage />}
       </main>
 
-      {/* Bottom Navigation - 4 Tabs */}
+      {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-[#111111] border-t border-[#1a1a1a] z-50">
         <div className="max-w-7xl mx-auto px-2">
           <div className="grid grid-cols-4 gap-1">
