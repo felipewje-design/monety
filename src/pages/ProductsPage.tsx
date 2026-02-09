@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext'; // Verifique se o caminho está correto no seu projeto
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { TrendingUp, History, X, Timer, Pickaxe, Gem, Crown, Sparkles, Star, Award, Clock, Loader2, AlertCircle } from 'lucide-react';
+import { 
+  TrendingUp, History, X, Timer, Pickaxe, Gem, Crown, 
+  Sparkles, Star, Award, Clock, Loader2, AlertCircle 
+} from 'lucide-react';
 import { toast } from 'sonner';
 
+// --- INTERFACES ---
 interface Product {
   id: string;
   name: string;
   price: number;
   daily_return: number;
   duration_days: number;
-  total_return: number;
-  image_url: string;
   tier: string;
   icon: string;
 }
@@ -24,9 +26,9 @@ interface Investment {
   daily_return: number;
   days_remaining: number;
   created_at: string;
-  image_url: string;
 }
 
+// --- CONFIGURAÇÃO DE CORES E ÍCONES ---
 const tierColors: Record<string, { bg: string; border: string; icon: string }> = {
   bronze: { bg: 'from-amber-900/20 to-amber-800/20', border: 'border-amber-700/30', icon: 'text-amber-500' },
   silver: { bg: 'from-gray-500/20 to-gray-600/20', border: 'border-gray-500/30', icon: 'text-gray-400' },
@@ -49,83 +51,58 @@ const getIcon = (iconName: string, className: string) => {
   return icons[iconName] || <Pickaxe className={className} />;
 };
 
-// Dados de fallback para caso a API falhe (Isso resolve a tela vazia)
-const FALLBACK_PRODUCTS = [
-  { id: '1', name: 'Minerador Iniciante', price: 50, daily_return: 10, duration_days: 30, tier: 'bronze', icon: 'pickaxe' },
-  { id: '2', name: 'Placa de Vídeo Basic', price: 100, daily_return: 22, duration_days: 30, tier: 'silver', icon: 'gem' },
-  { id: '3', name: 'Rig de Mineração', price: 250, daily_return: 60, duration_days: 30, tier: 'gold', icon: 'sparkles' },
-  { id: '4', name: 'Servidor Dedicado', price: 500, daily_return: 125, duration_days: 30, tier: 'emerald', icon: 'crown' }
+// --- PRODUTOS DE EMERGÊNCIA (Caso o Firebase esteja vazio) ---
+const FALLBACK_PRODUCTS: Product[] = [
+  { id: 'f1', name: 'Minerador Starter', price: 50, daily_return: 5, duration_days: 30, tier: 'bronze', icon: 'pickaxe' },
+  { id: 'f2', name: 'Minerador Advanced', price: 100, daily_return: 12, duration_days: 30, tier: 'silver', icon: 'gem' },
+  { id: 'f3', name: 'Minerador Master', price: 250, daily_return: 35, duration_days: 30, tier: 'gold', icon: 'sparkles' }
 ];
 
 export default function ProductsPage() {
   const { user, token, refreshUser } = useAuth();
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
-  
+  const [error, setError] = useState(false);
+
   useEffect(() => {
-    fetchProducts();
-    if(token) fetchInvestments();
+    loadData();
   }, [token]);
 
-  const fetchProducts = async () => {
+  const loadData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await fetch('/api/products');
-      const contentType = response.headers.get("content-type");
+      const [resProd, resInv] = await Promise.all([
+        fetch('/api/products'),
+        token ? fetch('/api/investments', { headers: { 'Authorization': `Bearer ${token}` } }) : Promise.resolve(null)
+      ]);
 
-      if (response.ok && contentType && contentType.includes("application/json")) {
-        const data = await response.json();
-        
-        if (Array.isArray(data) && data.length > 0) {
-            const productsWithTiers = data.map((p: any, idx: number) => ({
-            ...p,
-            tier: ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'emerald', 'elite'][idx] || 'bronze',
-            icon: ['pickaxe', 'pickaxe', 'gem', 'sparkles', 'gem', 'star', 'crown'][idx] || 'pickaxe'
-            }));
-            setProducts(productsWithTiers);
-        } else {
-            console.warn("API retornou lista vazia. Usando fallback.");
-            setProducts(FALLBACK_PRODUCTS);
-        }
+      if (resProd && resProd.ok) {
+        const data = await resProd.json();
+        // Se a API vier vazia, usamos o fallback
+        setProducts(data.length > 0 ? data : FALLBACK_PRODUCTS);
       } else {
-        throw new Error("API Indisponível");
+        setProducts(FALLBACK_PRODUCTS);
+        setError(true);
+      }
+
+      if (resInv && resInv.ok) {
+        const data = await resInv.json();
+        setInvestments(data);
       }
     } catch (err) {
-      console.error('Erro ao buscar produtos (usando fallback):', err);
-      // Se der erro, usa os produtos de teste para a tela não ficar branca
+      console.error("Erro ao carregar dados:", err);
       setProducts(FALLBACK_PRODUCTS);
+      setError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchInvestments = async () => {
-    try {
-      const response = await fetch('/api/investments', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if(Array.isArray(data)) setInvestments(data);
-      }
-    } catch (err) {
-      console.error('Error fetching investments:', err);
-    }
-  };
-
-  const handleInvestment = async (productId: string, productName: string, price: number) => {
-    const userBalance = Number(user?.balance) || 0;
-    
-    // Simulação se for produto de fallback (ID numérico pequeno)
-    if (productId.length < 5) {
-        toast.error('Modo de demonstração', { description: 'Conecte o backend para comprar de verdade.' });
-        return;
-    }
-
-    if (userBalance < price) {
-      toast.error('Saldo insuficiente', { description: 'Faça um depósito para continuar' });
+  const handleBuy = async (productId: string, price: number) => {
+    if (!user || Number(user.balance) < price) {
+      toast.error("Saldo insuficiente", { description: "Faça um depósito para continuar." });
       return;
     }
 
@@ -135,195 +112,152 @@ export default function ProductsPage() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ productId })
       });
+
       if (response.ok) {
-        await refreshUser();
-        await fetchInvestments();
-        toast.success('🎉 Compra realizada!', { description: `Você adquiriu o ${productName} com sucesso` });
+        toast.success("Máquina Ativada!", { description: "O seu rendimento diário começou." });
+        refreshUser();
+        loadData();
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Erro ao investir');
+        const errData = await response.json();
+        toast.error(errData.error || "Erro na compra");
       }
     } catch (err) {
-      console.error('Error investing:', err);
-      toast.error('Erro ao realizar investimento');
+      toast.error("Erro de conexão com o servidor.");
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 h-[50vh]">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 text-[#22c55e] animate-spin mx-auto mb-4" />
-          <p className="text-white">Carregando produtos...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[80vh] text-white">
+        <Loader2 className="w-10 h-10 text-[#22c55e] animate-spin mb-4" />
+        <p className="text-gray-400">A carregar máquinas de mineração...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-20 px-4 pt-4">
+    <div className="space-y-6 pb-24 px-4 pt-4 min-h-screen bg-black">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Produtos</h1>
-          <p className="text-gray-400 text-sm">Invista e receba retorno diário</p>
+          <h1 className="text-2xl font-black text-white">MÁQUINAS</h1>
+          <p className="text-gray-400 text-xs">Escolha o seu poder de mineração</p>
         </div>
         <Button
           onClick={() => setShowHistory(true)}
-          className="bg-[#111111] border border-[#1a1a1a] text-white hover:bg-[#1a1a1a]"
+          className="bg-[#111111] border border-white/10 text-white hover:bg-white/5"
         >
           <History className="w-4 h-4 mr-2" />
           Histórico
         </Button>
       </div>
 
-      {/* Info Banner */}
-      <div className="bg-[#111111]/80 backdrop-blur-sm border border-[#22c55e]/20 rounded-xl p-3 flex items-center gap-3">
-        <TrendingUp className="w-5 h-5 text-[#22c55e] flex-shrink-0" />
-        <p className="text-sm text-gray-300">
-          Mineradores rendem <span className="text-[#22c55e] font-bold">diariamente</span> sobre o valor investido.
-        </p>
+      {/* Alerta de erro de base de dados */}
+      {error && (
+        <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-center gap-3 text-amber-500 text-xs">
+          <AlertCircle size={18} />
+          <span>A mostrar produtos de demonstração. Verifique a sua ligação ou permissões do Firebase.</span>
+        </div>
+      )}
+
+      {/* Saldo Rápido */}
+      <div className="bg-[#111111] border border-white/5 rounded-2xl p-4 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[#22c55e]/10 rounded-full flex items-center justify-center">
+            <TrendingUp className="text-[#22c55e] w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-gray-500 text-[10px] uppercase font-bold">O seu saldo</p>
+            <p className="text-white font-bold text-lg">R$ {Number(user?.balance || 0).toFixed(2)}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Saldo Card */}
-      <div className="bg-[#111111]/80 backdrop-blur-sm border border-[#1a1a1a] rounded-xl p-4 flex items-center justify-between">
-        <div>
-          <p className="text-gray-400 text-sm">Seu saldo</p>
-          <p className="text-xl font-bold text-white">R$ {(Number(user?.balance) || 0).toFixed(2)}</p>
-        </div>
-        <div className="w-10 h-10 bg-[#22c55e]/20 rounded-lg flex items-center justify-center">
-          <TrendingUp className="w-5 h-5 text-[#22c55e]" />
-        </div>
-      </div>
-
-      {/* Products Grid */}
-      <div className="space-y-3 pb-10">
-        {products.map((product, index) => {
+      {/* Lista de Produtos */}
+      <div className="grid gap-4">
+        {products.map((product) => {
           const colors = tierColors[product.tier] || tierColors.bronze;
-          const userBalance = Number(user?.balance) || 0;
-          const canBuy = userBalance >= Number(product.price);
+          const canAfford = Number(user?.balance || 0) >= product.price;
 
           return (
             <div
               key={product.id}
-              className={`bg-gradient-to-br ${colors.bg} border ${colors.border} rounded-xl overflow-hidden`}
+              className={`bg-gradient-to-br ${colors.bg} border ${colors.border} rounded-3xl overflow-hidden relative`}
             >
-              <div className="p-4">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 bg-gradient-to-br ${colors.bg} rounded-lg flex items-center justify-center`}>
-                      {getIcon(product.icon, `w-5 h-5 ${colors.icon}`)}
+              <div className="p-5">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex gap-4">
+                    <div className="w-14 h-14 bg-black/40 rounded-2xl flex items-center justify-center border border-white/5">
+                      {getIcon(product.icon, `w-7 h-7 ${colors.icon}`)}
                     </div>
                     <div>
-                      <h3 className="font-bold text-white">{product.name}</h3>
-                      <p className="text-[#22c55e] font-bold">R$ {Number(product.price).toFixed(2)}</p>
+                      <h3 className="font-bold text-white text-lg">{product.name}</h3>
+                      <div className="flex items-center gap-1 text-[#22c55e]">
+                        <span className="text-sm font-bold">R$</span>
+                        <span className="text-2xl font-black">{Number(product.price).toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <TrendingUp className="w-3 h-3 text-[#22c55e]" />
-                      <span className="text-gray-500 text-xs">Diário</span>
-                    </div>
-                    <p className="text-sm font-bold text-[#22c55e]">R$ {Number(product.daily_return).toFixed(2)}</p>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                    <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Lucro Diário</p>
+                    <p className="text-[#22c55e] font-bold text-sm">+ R$ {Number(product.daily_return).toFixed(2)}</p>
                   </div>
-                  <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <Clock className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-500 text-xs">Duração</span>
-                    </div>
-                    <p className="text-sm font-bold text-white">{product.duration_days} dias</p>
-                  </div>
-                  <div className="bg-[#0a0a0a]/50 rounded-lg p-2 text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <TrendingUp className="w-3 h-3 text-[#22c55e]" />
-                      <span className="text-gray-500 text-xs">ROI Total</span>
-                    </div>
-                    <p className="text-sm font-bold text-[#22c55e]">
-                      {((Number(product.daily_return) * product.duration_days / Number(product.price)) * 100).toFixed(0)}%
-                    </p>
+                  <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                    <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Ciclo Total</p>
+                    <p className="text-white font-bold text-sm">{product.duration_days} Dias</p>
                   </div>
                 </div>
 
-                {/* Buy Button */}
-                <button
-                  onClick={() => handleInvestment(product.id, product.name, Number(product.price))}
-                  disabled={!canBuy}
-                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
-                    canBuy
-                      ? 'bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white hover:from-[#16a34a] hover:to-[#22c55e] shadow-lg shadow-[#22c55e]/20'
-                      : 'bg-[#1a1a1a] text-gray-500 cursor-not-allowed'
+                <Button
+                  onClick={() => handleBuy(product.id, product.price)}
+                  className={`w-full py-7 rounded-2xl font-black text-sm transition-all ${
+                    canAfford 
+                    ? 'bg-[#22c55e] hover:bg-[#16a34a] text-black shadow-lg shadow-[#22c55e]/20' 
+                    : 'bg-white/5 text-gray-500'
                   }`}
                 >
-                  {canBuy ? 'COMPRAR AGORA' : 'SALDO INSUFICIENTE'}
-                </button>
+                  {canAfford ? 'ATIVAR AGORA' : 'SALDO INSUFICIENTE'}
+                </Button>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* History Modal */}
+      {/* Modal de Histórico */}
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
-        <DialogContent className="bg-[#111111] border-[#1a1a1a] text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="bg-[#0a0a0a] border-white/10 text-white max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
-              <span>Histórico de Compras</span>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="w-10 h-10 bg-[#0a0a0a] rounded-full flex items-center justify-center hover:bg-[#1a1a1a] transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
+              <span>Minhas Máquinas</span>
+              <X className="w-5 h-5 text-gray-500" onClick={() => setShowHistory(false)} />
             </DialogTitle>
           </DialogHeader>
 
-          {investments.length === 0 ? (
-            <div className="text-center py-8">
-              <History className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">Nenhum investimento ativo</p>
-              <p className="text-gray-500 text-sm">Compre um produto para começar a ganhar</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {investments.map((inv) => {
-                const totalDays = 60;
-                const daysElapsed = totalDays - inv.days_remaining;
-                const progress = (daysElapsed / totalDays) * 100;
-
-                return (
-                  <div key={inv.id} className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold text-white">{inv.product_name}</h3>
-                      <span className="text-[#22c55e] font-bold">R$ {Number(inv.amount).toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-gray-400 text-sm">
-                        <Timer className="w-4 h-4" />
-                        <span>Tempo restante</span>
-                      </div>
-                      <div className="bg-[#22c55e]/20 px-3 py-1 rounded-full">
-                        <span className="text-[#22c55e] font-bold text-sm">{inv.days_remaining} dias</span>
-                      </div>
-                    </div>
-                    <div className="bg-[#1a1a1a] rounded-full h-2 overflow-hidden mb-2">
-                      <div
-                        className="bg-gradient-to-r from-[#22c55e] to-[#16a34a] h-full transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Rendimento diário: <span className="text-[#22c55e]">+R$ {Number(inv.daily_return).toFixed(2)}</span>
-                    </p>
+          <div className="space-y-4 mt-4">
+            {investments.length > 0 ? (
+              investments.map((inv) => (
+                <div key={inv.id} className="bg-[#111111] border border-white/5 rounded-2xl p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <h4 className="font-bold text-white">{inv.product_name}</h4>
+                    <span className="text-[#22c55e] font-bold text-xs">+R$ {inv.daily_return}/dia</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <Clock size={12} />
+                    <span>Expira em {inv.days_remaining} dias</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-10">
+                <Pickaxe className="w-12 h-12 text-white/10 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">Nenhuma máquina ativa no momento.</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
